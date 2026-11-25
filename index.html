@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piso de frete ANTT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*
+VOICE: prática, de pátio de carregamento; direta, sem enfeite.
+IDEA: a página se comporta como uma placa de rodovia brasileira + o manifesto da viagem.
+PICTURE: a placa verde com o piso em tamanho grande e a estrada com as paradas e os km.
+COLOUR and TYPE: verde de placa #0b6b3e dominante, branco e asfalto como apoio, laranja de cone #ff6a13 de alerta; Barlow Semi Condensed + Barlow.
+LAYOUT: entradas à esquerda, placa de resultado fixa à direita, estrada em faixa cheia embaixo; empilha abaixo de 860px.
+*/
+:root{color-scheme:light dark;--bg:light-dark(#f4f5f2,#111513);--card:light-dark(#ffffff,#1a201d);--ink:light-dark(#16201b,#e9eee9);--mute:light-dark(#5b6660,#9fada5);--line:light-dark(#d8ddd8,#2c3530);--sign:#0b6b3e;--sign2:#085430;--cone:#ff6a13;--ok:light-dark(#0b6b3e,#5fd394);--asph:light-dark(#2b302d,#2b302d)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Barlow,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.big,.chip,.lbl{font-family:"Barlow Semi Condensed",Barlow,sans-serif}
+.band{padding:clamp(20px,3.5vw,48px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.top{background:var(--sign);color:#fff;padding-bottom:clamp(16px,2.5vw,28px)}
+.top h1{margin:0;font-size:clamp(32px,4.6vw,48px);line-height:1.05;font-weight:700;text-wrap:balance}
+.top p{margin:6px 0 0;opacity:.88;max-width:70ch}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(18px,3vw,40px);align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,2.4vw,26px)}
+.lbl{display:block;font-weight:600;font-size:17px;margin:0 0 8px}
+.sec+.sec{margin-top:22px}
+.hint{color:var(--mute);font-size:14px;margin:6px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-width:58px;height:48px;padding:0 12px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:20px;font-weight:600;cursor:pointer}
+.chip small{font-size:13px;font-weight:500;margin-left:2px}
+.chip[aria-pressed=true]{background:var(--sign);border-color:var(--sign);color:#fff}
+.chip:disabled{opacity:.35;cursor:not-allowed}
+select,input{font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:2px solid var(--line);border-radius:10px;height:48px;padding:0 12px;width:100%}
+select:focus,input:focus,button:focus-visible{outline:3px solid var(--cone);outline-offset:1px}
+.stop{display:grid;grid-template-columns:36px minmax(0,1fr) 112px 40px;gap:8px;align-items:center;margin-bottom:8px}
+.stop.o{grid-template-columns:36px minmax(0,1fr)}
+.tag{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font:700 15px "Barlow Semi Condensed",sans-serif;background:var(--asph);color:#fff}
+.o .tag{background:var(--sign)}
+.ac{position:relative}
+.sug{position:absolute;z-index:5;left:0;right:0;top:52px;margin:0;padding:4px;list-style:none;background:var(--card);border:2px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgb(0 0 0/.18);max-height:280px;overflow:auto}
+.sug li{padding:9px 10px;border-radius:7px;cursor:pointer}
+.sug li[aria-selected=true],.sug li:hover{background:light-dark(#e6f1ea,#21362b)}
+.sug b{font-weight:600}.sug span{color:var(--mute);margin-left:6px}
+.km{position:relative}.km input{padding-right:40px;text-align:right}
+.km em{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-style:normal;font-size:13px;color:var(--mute);pointer-events:none}
+.km.est input{border-style:dashed}
+.icon{width:40px;height:40px;border-radius:10px;border:0;background:transparent;color:var(--mute);font-size:22px;cursor:pointer}
+.icon:hover{background:var(--line)}
+.btn{height:46px;padding:0 16px;border-radius:10px;border:2px solid var(--sign);background:transparent;color:var(--ok);font:600 16px Barlow,sans-serif;cursor:pointer}
+.btn.fill{background:var(--sign);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.money{position:relative}.money span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mute)}.money input{padding-left:40px}
+.result{position:sticky;top:16px}
+.plate{background:var(--sign);color:#fff;border-radius:14px;padding:clamp(18px,2.6vw,28px);border:4px solid #fff;outline:2px solid var(--sign);box-shadow:0 14px 34px rgb(11 107 62/.28)}
+.plate .k{font:600 18px "Barlow Semi Condensed",sans-serif;opacity:.9;margin:0}
+.big{font-size:clamp(40px,6vw,64px);font-weight:700;line-height:1.02;margin:4px 0 6px;white-space:nowrap}
+.formula{font-size:15px;opacity:.9;margin:0}
+.status{margin-top:14px;padding:10px 12px;border-radius:10px;font-weight:600;background:rgb(255 255 255/.14)}
+.status.bad{background:var(--cone);color:#1b0d03}
+.status.ok{background:#fff;color:var(--sign2)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font:700 22px "Barlow Semi Condensed",sans-serif;white-space:nowrap}
+.stat span{color:var(--mute);font-size:14px}
+.enq{margin:14px 0 0;font-size:15px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.road{background:var(--asph);color:#fff;border-radius:14px;padding:22px 0 18px;overflow-x:auto;scroll-snap-type:x proximity}
+.road ol{list-style:none;margin:0;padding:0 18px;display:flex;min-width:max-content;position:relative}
+.road ol::before{content:"";position:absolute;left:18px;right:18px;top:21px;height:4px;background:repeating-linear-gradient(90deg,#ffd23f 0 22px,transparent 22px 38px)}
+.road li{position:relative;width:150px;flex:none;text-align:center;scroll-snap-align:start}
+.road .dot{width:46px;height:46px;margin:0 auto 8px;border-radius:50%;background:#fff;color:var(--sign2);display:grid;place-items:center;font:700 18px "Barlow Semi Condensed",sans-serif;position:relative;border:4px solid var(--asph)}
+.road li:first-child .dot{background:var(--sign);color:#fff}
+.road .nm{font-weight:600;line-height:1.2;padding:0 6px}
+.road .sub{font-size:13px;opacity:.75}
+.road .seg{position:absolute;top:-2px;left:-50%;width:100%;text-align:center;font:600 13px Barlow,sans-serif;color:#ffd23f}
+.empty{padding:6px 18px;opacity:.8}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+details+details{margin-top:10px}
+summary{cursor:pointer;font-weight:600}
+details p,details li{max-width:75ch}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row input{width:110px}
+.note{color:var(--mute);font-size:14px;margin-top:10px}
+@media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}.result{position:static;order:-1}}
+@media(max-width:480px){.stop{grid-template-columns:30px minmax(0,1fr) 92px 34px;gap:6px}.stop.o{grid-template-columns:30px minmax(0,1fr)}.tag{width:28px;height:28px}.chip{min-width:50px}}
+@media(prefers-reduced-motion:no-preference){.big{transition:color .2s}.plate{transition:transform .25s}.plate.pulse{transform:scale(1.012)}}
+</style>
+</head>
+<body>
+<header class="band top"><div class="wrap">
+<h1>Piso mínimo de frete ANTT</h1>
+<p>Tabela A (carga lotação) · Portaria SUROC nº 22/2026, em vigor desde 30/09/2026 · Piso = km × CCD + CC</p>
+</div></header>
+
+<main class="band"><div class="wrap grid">
+<section class="panel" aria-label="Dados da viagem">
+  <div class="sec">
+    <span class="lbl" id="lbEixos">Eixos carregados do conjunto</span>
+    <div class="chips" id="eixos" role="group" aria-labelledby="lbEixos"></div>
+    <p class="hint">Conte cavalo + carreta. Eixos suspensos também contam.</p>
+  </div>
+  <div class="sec">
+    <label class="lbl" for="tipo">Tipo de carga</label>
+    <select id="tipo"></select>
+    <p class="hint">Conservas, extrato de tomate e produto acabado embalado: carga geral.</p>
+  </div>
+  <div class="sec">
+    <span class="lbl">Roteiro</span>
+    <div id="stops"></div>
+    <button class="btn" id="add" type="button">+ Adicionar entrega</button>
+    <p class="hint" id="loadMsg">Carregando lista de cidades…</p>
+  </div>
+  <div class="sec">
+    <label class="lbl" for="frete">Frete combinado</label>
+    <div class="money"><span>R$</span><input id="frete" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+  </div>
+</section>
+
+<aside class="result" aria-live="polite">
+  <div class="plate" id="plate">
+    <p class="k" id="pk">Piso mínimo</p>
+    <div class="big" id="piso">R$ 0,00</div>
+    <p class="formula" id="formula">Escolha as cidades para calcular.</p>
+    <div class="status" id="status">Informe o frete combinado para comparar.</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="sKm">0 km</b><span>Distância total</span></div>
+    <div class="stat"><b id="sEnt">0</b><span>Entregas</span></div>
+    <div class="stat"><b id="sPkm">–</b><span>Piso por km</span></div>
+    <div class="stat"><b id="sFkm">–</b><span>Frete por km</span></div>
+  </div>
+  <p class="enq" id="enq"></p>
+  <div class="acts">
+    <button class="btn fill" id="copy" type="button">Copiar resumo</button>
+    <a class="btn" id="maps" href="#" target="_blank" rel="noopener">Conferir rota no Google Maps</a>
+    <button class="btn" id="clear" type="button">Limpar</button>
+  </div>
+</aside>
+</div></main>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+  <div class="road" aria-label="Estrada da viagem"><ol id="road"></ol></div>
+</div></section>
+
+<section class="band" style="padding-top:0"><div class="wrap">
+<details>
+  <summary>Como a distância é calculada</summary>
+  <p>O site estima cada trecho pela distância em linha reta entre as cidades multiplicada por um fator de estrada. A ANTT confere o piso pela rota declarada no MDF-e usando roteirizadores públicos como o Google Maps, então <b>confirme no botão "Conferir rota no Google Maps"</b> e, se der diferente, digite o km certo no trecho (o campo deixa de ser estimado).</p>
+  <div class="row"><label for="fator">Fator de estrada</label><input id="fator" inputmode="decimal" value="1,25"><span class="note">1,25 = a estrada é, em média, 25% mais longa que a linha reta.</span></div>
+</details>
+<details>
+  <summary>Quando o piso é obrigatório</summary>
+  <ul>
+    <li><b>1 entrega</b> (um contratante, um par origem/destino, um CT-e ou NF): é carga lotação e o piso é obrigatório. O CIOT é bloqueado se o frete ficar abaixo.</li>
+    <li><b>Várias entregas</b>: o piso não é obrigatório pela Resolução 5.867/2020; o valor aparece só como referência (soma dos trechos + um CC).</li>
+    <li>A região do Brasil não muda o piso: só contam distância, eixos e tipo de carga.</li>
+    <li>Pedágio e vale-pedágio ficam fora do piso e são pagos à parte. O CC (carga e descarga) entra uma vez por viagem.</li>
+  </ul>
+</details>
+<details>
+  <summary>Fonte dos coeficientes</summary>
+  <p>Tabela A do Anexo II da Resolução ANTT 5.867/2020, valores da Portaria SUROC nº 22/2026 (diesel S10 de referência R$ 7,33/L). Quando a ANTT publicar nova tabela, os coeficientes deste site precisam ser atualizados. Para casos de dúvida, confira na calculadora oficial: calculadorafrete.antt.gov.br.</p>
+</details>
+</div></section>
+
+<script>
+{
+const AX=['2','3','4','5','6','7','9'];
+const T={
+'Granel sólido':[[4.1056,460.59],[5.2555,552.24],[5.9476,597],[6.8548,664.83],[7.5641,680.01],[8.2316,820.34],[9.4318,908.91]],
+'Granel líquido':[[4.1796,471.98],[5.3511,569.57],[6.1019,621.52],[7.0226,693.08],[7.7372,709.72],[8.37,840.5],[9.5909,934.76]],
+'Frigorificada ou aquecida':[[4.8234,520.07],[6.1659,623.27],[7.0345,686.63],[8.0623,757.98],[8.8911,772.35],[9.8134,982.76],[11.1479,1067.06]],
+'Conteinerizada':[null,[5.2282,544.75],[5.8755,577.15],[6.791,647.29],[7.4986,662.01],[8.2292,819.69],[9.3486,886.05]],
+'Carga geral':[[4.0738,451.84],[5.2177,541.86],[5.918,588.86],[6.8284,657.56],[7.5347,671.93],[8.2727,831.66],[9.4114,903.32]],
+'Neogranel':[[3.6743,451.84],[5.2162,541.44],[5.9453,596.35],[6.8284,657.56],[7.5347,671.93],[8.2727,831.66],[9.4114,903.32]],
+'Perigosa (granel sólido)':[[4.8756,608.79],[6.0354,703.16],[6.7644,753.03],[7.6715,820.86],[8.3808,836.04],[9.0666,981.39],[10.2747,1072.15]],
+'Perigosa (granel líquido)':[[4.9621,632.58],[6.1436,732.9],[6.8986,789.96],[7.8193,861.51],[8.5339,878.16],[9.1849,1013.95],[10.4138,1110.41]],
+'Perigosa (frigorificada ou aquecida)':[[5.4315,630.88],[6.7869,737.63],[7.6718,807.63],[8.6996,878.98],[9.5284,893.35],[10.4745,1110.28],[11.8192,1197.43]],
+'Perigosa (conteinerizada)':[null,[5.6126,645.45],[6.2966,682.95],[7.2121,753.1],[7.9198,767.81],[8.6686,930.51],[9.796,999.06]],
+'Perigosa (carga geral)':[[4.4482,549.81],[5.6021,642.55],[6.3392,694.66],[7.2495,763.36],[7.9558,777.73],[8.7121,942.48],[9.8588,1016.33]],
+'Granel pressurizada':[null,null,null,[7.1929,757.81],[7.9452,784.82],null,[9.9531,1052.26]]
+};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const brl=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const n0=v=>Math.round(v).toLocaleString('pt-BR');
+const n4=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:4});
+const n2=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const parseBR=s=>{s=String(s||'').replace(/[^\d,.-]/g,'');if(!s)return NaN;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');else if((s.match(/\./g)||[]).length>1||/\.\d{3}$/.test(s))s=s.replace(/\./g,'');return parseFloat(s)};
+const hav=(a,b)=>{const r=Math.PI/180,dl=(b[2]-a[2])*r,dn=(b[3]-a[3])*r,x=Math.sin(dl/2)**2+Math.cos(a[2]*r)*Math.cos(b[2]*r)*Math.sin(dn/2)**2;return 2*6371*Math.asin(Math.sqrt(x))};
+
+let C=[],CN=[],ready=false;
+let S={eixos:'6',tipo:'Carga geral',fator:1.25,frete:'',stops:[{c:null,t:'Morrinhos',uf:'GO'},{c:null,t:'',km:null,man:false}]};
+const KEY='pisoFreteANTT.v1';
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&Array.isArray(s.stops)&&s.stops.length)S=Object.assign(S,s)}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({eixos:S.eixos,tipo:S.tipo,fator:S.fator,frete:S.frete,stops:S.stops.map(s=>({t:s.c?s.c[0]:s.t,uf:s.c?s.c[1]:s.uf,km:s.km,man:s.man}))}))}catch(e){}};
+
+$('tipo').innerHTML=Object.keys(T).map(k=>`<option>${esc(k)}</option>`).join('');
+$('tipo').value=T[S.tipo]?S.tipo:'Carga geral';S.tipo=$('tipo').value;
+const coef=()=>{const r=T[S.tipo][AX.indexOf(S.eixos)];return r?{ccd:r[0],cc:r[1]}:null};
+function renderEixos(){
+  const row=T[S.tipo];
+  if(!row[AX.indexOf(S.eixos)])S.eixos=AX[row.findIndex(x=>x)];
+  $('eixos').innerHTML=AX.map((a,i)=>`<button type="button" class="chip" data-a="${a}" aria-pressed="${a===S.eixos}" ${row[i]?'':'disabled title="Sem coeficiente para este tipo de carga"'}>${a}<small>eixos</small></button>`).join('');
+}
+$('eixos').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b||b.disabled)return;S.eixos=b.dataset.a;renderEixos();update()});
+$('tipo').addEventListener('change',()=>{S.tipo=$('tipo').value;renderEixos();update()});
+$('fator').value=n2(S.fator);
+$('fator').addEventListener('input',()=>{const v=parseBR($('fator').value);if(v>=1&&v<=2){S.fator=v;update()}});
+$('frete').value=S.frete;
+$('frete').addEventListener('input',()=>{S.frete=$('frete').value;update()});
+
+function segKm(i){
+  const s=S.stops[i],p=S.stops[i-1];
+  if(s.man&&s.km>0)return{v:s.km,est:false};
+  if(s.c&&p&&p.c)return{v:Math.round(hav(p.c,s.c)*S.fator),est:true};
+  return null;
+}
+function renderStops(){
+  $('stops').innerHTML=S.stops.map((s,i)=>{
+    const o=i===0,lab=o?'Origem (carregamento)':`Entrega ${i}`;
+    return `<div class="stop${o?' o':''}" data-i="${i}">
+      <span class="tag" aria-hidden="true">${o?'O':i}</span>
+      <div class="ac"><input class="city" aria-label="${lab}" placeholder="${o?'Cidade de carregamento':'Cidade de entrega'}" value="${esc(s.c?s.c[0]+' – '+s.c[1]:s.t||'')}" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"><ul class="sug" role="listbox" hidden></ul></div>
+      ${o?'':`<div class="km"><input class="kmi" inputmode="numeric" aria-label="Km do trecho ${i}" placeholder="0"><em>km</em></div>
+      <button type="button" class="icon rm" aria-label="Remover entrega ${i}" ${S.stops.length<3?'disabled':''}>×</button>`}
+    </div>`}).join('');
+}
+function search(q){
+  q=norm(q);if(q.length<2)return[];
+  let uf='';const m=q.match(/^(.*?)[\s,\-–\/]+([a-z]{2})$/);
+  if(m&&/^(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)$/.test(m[2])){q=m[1];uf=m[2].toUpperCase()}
+  const a=[],b=[];
+  for(let i=0;i<C.length&&a.length<12;i++){if(uf&&C[i][1]!==uf)continue;const n=CN[i];if(n.startsWith(q))a.push(C[i]);else if(b.length<12&&n.includes(q))b.push(C[i])}
+  return a.concat(b).slice(0,10);
+}
+function openSug(inp,list){
+  const ul=inp.nextElementSibling;inp._list=list;inp._sel=0;
+  if(!list.length){ul.hidden=true;inp.setAttribute('aria-expanded','false');return}
+  ul.innerHTML=list.map((c,k)=>`<li role="option" data-k="${k}" aria-selected="${k===0}"><b>${esc(c[0])}</b><span>${esc(c[1])}</span></li>`).join('');
+  ul.hidden=false;inp.setAttribute('aria-expanded','true');
+}
+function pick(inp,c){
+  const i=+inp.closest('.stop').dataset.i;S.stops[i].c=c;S.stops[i].t=c[0];S.stops[i].uf=c[1];
+  inp.value=c[0]+' – '+c[1];inp.nextElementSibling.hidden=true;inp.setAttribute('aria-expanded','false');
+  if(S.stops[i+1])S.stops[i+1].man=false;
+  if(i>0)S.stops[i].man=false;
+  update();
+  const nx=document.querySelector(`.stop[data-i="${i+1}"] .city`);if(nx&&!nx.value)nx.focus();
+}
+const box=$('stops');
+box.addEventListener('input',e=>{
+  const t=e.target,st=t.closest('.stop');if(!st)return;const i=+st.dataset.i,s=S.stops[i];
+  if(t.classList.contains('city')){s.c=null;s.t=t.value;s.uf='';if(ready)openSug(t,search(t.value));update()}
+  if(t.classList.contains('kmi')){const v=parseBR(t.value);s.man=v>0;s.km=v>0?Math.round(v):null;update(true)}
+});
+box.addEventListener('keydown',e=>{
+  const t=e.target;if(!t.classList.contains('city'))return;const ul=t.nextElementSibling;if(ul.hidden||!t._list)return;
+  const L=t._list.length;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();t._sel=(t._sel+(e.key==='ArrowDown'?1:-1)+L)%L;[...ul.children].forEach((li,k)=>li.setAttribute('aria-selected',k===t._sel))}
+  else if(e.key==='Enter'){e.preventDefault();pick(t,t._list[t._sel])}
+  else if(e.key==='Escape'){ul.hidden=true}
+});
+box.addEventListener('mousedown',e=>{const li=e.target.closest('.sug li');if(!li)return;e.preventDefault();const inp=li.closest('.ac').querySelector('.city');pick(inp,inp._list[+li.dataset.k])});
+box.addEventListener('focusout',e=>{if(e.target.classList.contains('city'))setTimeout(()=>{e.target.nextElementSibling.hidden=true},120)});
+box.addEventListener('click',e=>{const b=e.target.closest('.rm');if(!b)return;const i=+b.closest('.stop').dataset.i;S.stops.splice(i,1);if(S.stops[i])S.stops[i].man=false;renderStops();update()});
+$('add').addEventListener('click',()=>{S.stops.push({c:null,t:'',km:null,man:false});renderStops();update();box.querySelector(`.stop[data-i="${S.stops.length-1}"] .city`).focus()});
+$('clear').addEventListener('click',()=>{const o=S.stops[0];S.stops=[o,{c:null,t:'',km:null,man:false}];S.frete='';$('frete').value='';renderStops();update()});
+
+let last='';
+function update(fromKm){
+  const co=coef();let tot=0,cnt=0;const segs=[null];
+  S.stops.forEach((s,i)=>{if(!i)return;const k=segKm(i);segs.push(k);if(s.c||s.man)cnt++;if(k)tot+=k.v});
+  if(!fromKm)document.querySelectorAll('.stop').forEach(el=>{const i=+el.dataset.i;if(!i)return;const k=segs[i],inp=el.querySelector('.kmi'),w=el.querySelector('.km');if(document.activeElement===inp)return;inp.value=k?n0(k.v):'';w.classList.toggle('est',!!(k&&k.est));w.title=k&&k.est?'Estimado. Digite para corrigir.':''});
+  const multi=cnt>1;$('pk').textContent=multi?'Referência (várias entregas)':'Piso mínimo';
+  const fr=parseBR(S.frete);let piso=0;
+  if(co&&tot>0){piso=tot*co.ccd+co.cc;$('piso').textContent=brl(piso);$('formula').textContent=`${n0(tot)} km × ${n4(co.ccd)} + ${brl(co.cc)} (CC)`}
+  else{$('piso').textContent='R$ 0,00';$('formula').textContent=co?'Escolha as cidades para calcular.':'Sem coeficiente para essa combinação.'}
+  const st=$('status');st.className='status';
+  if(!(fr>0)||!piso)st.textContent='Informe o frete combinado para comparar.';
+  else if(fr>=piso){st.classList.add('ok');st.textContent=`Frete OK: ${brl(fr-piso)} acima ${multi?'da referência':'do piso'}.`}
+  else{st.classList.add('bad');st.textContent=multi?`${brl(piso-fr)} abaixo da referência. Permitido com várias entregas, mas confira.`:`Frete ${brl(piso-fr)} abaixo do piso. O CIOT será bloqueado.`}
+  $('sKm').textContent=n0(tot)+' km';$('sEnt').textContent=cnt;
+  $('sPkm').textContent=piso&&tot?brl(piso/tot):'–';$('sFkm').textContent=fr>0&&tot?brl(fr/tot):'–';
+  $('enq').innerHTML=cnt===0?'Adicione ao menos uma entrega.':multi?'<b>Várias entregas:</b> o piso não é obrigatório; o valor serve de referência. No CIOT, com um só contratante, cadastre como carga lotação.':'<b>Uma entrega:</b> carga lotação. O piso é obrigatório e validado na geração do CIOT.';
+  const pts=S.stops.filter(s=>s.c).map(s=>encodeURIComponent(`${s.c[0]}, ${s.c[1]}, Brasil`));
+  const mp=$('maps');if(pts.length>1){mp.href='https://www.google.com/maps/dir/'+pts.join('/');mp.removeAttribute('aria-disabled');mp.style.opacity=''}else{mp.href='https://www.google.com/maps';mp.setAttribute('aria-disabled','true');mp.style.opacity='.45'}
+  const named=S.stops.map((s,i)=>({s,i})).filter(x=>x.s.c);
+  $('road').innerHTML=named.length?named.map((x,j)=>{const k=segs[x.i];return `<li>${j&&k?`<span class="seg">${n0(k.v)} km${k.est?' *':''}</span>`:''}<div class="dot">${x.i?x.i:'O'}</div><div class="nm">${esc(x.s.c[0])}</div><div class="sub">${esc(x.s.c[1])}${x.i?'':' · origem'}</div></li>`}).join(''):'<li class="empty" style="width:auto">A estrada aparece aqui quando você escolher as cidades.</li>';
+  const sig=piso.toFixed(2);if(sig!==last){last=sig;const p=$('plate');p.classList.add('pulse');setTimeout(()=>p.classList.remove('pulse'),220)}
+  save();
+}
+$('copy').addEventListener('click',async()=>{
+  const co=coef(),fr=parseBR(S.frete),rota=S.stops.filter(s=>s.c).map(s=>`${s.c[0]}/${s.c[1]}`).join(' → ');
+  const txt=[`Piso de frete ANTT (Tabela A, Portaria SUROC 22/2026)`,`Carga: ${S.tipo} · ${S.eixos} eixos`,`Rota: ${rota||'-'} (${$('sKm').textContent})`,`${$('pk').textContent}: ${$('piso').textContent} = ${$('formula').textContent}`,fr>0?`Frete combinado: ${brl(fr)} · ${$('status').textContent}`:''].filter(Boolean).join('\n');
+  const b=$('copy');try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent='Copiar resumo',1600);
+});
+
+renderEixos();renderStops();update();
+fetch('municipios.json').then(r=>r.json()).then(d=>{
+  C=d;CN=d.map(c=>norm(c[0]));ready=true;$('loadMsg').textContent='Digite o nome da cidade e escolha na lista. Para cidades com o mesmo nome, digite a UF junto (ex.: Morrinhos GO).';
+  S.stops.forEach(s=>{if(!s.c&&s.t&&s.uf){const f=C.find(c=>c[0]===s.t&&c[1]===s.uf);if(f)s.c=f}});
+  renderStops();update();
+}).catch(()=>{$('loadMsg').textContent='Não foi possível carregar a lista de cidades. Digite os km de cada trecho manualmente.'});
+}
+</script>
+</body>
+</html>
