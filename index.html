@@ -72,9 +72,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .toll{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .toll h2{margin:0;font-size:20px;font-weight:700}
 .toll p{margin:4px 0 0;font-size:14px;color:var(--mute)}
-.toll ol{margin:10px 0 0;padding:0;list-style:none;max-height:260px;overflow:auto}
-.toll li{padding:8px 0;border-top:1px solid var(--line);font-size:15px;line-height:1.35}
-.toll li b{font-weight:600}.toll li span{display:block;color:var(--mute);font-size:13px}
+.toll .tv{font:700 32px "Barlow Semi Condensed",sans-serif;margin:2px 0 0;white-space:nowrap}
+.toll .tot{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:15px;color:var(--ink)}
 .toll a{color:var(--ok)}
 .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .road{background:var(--asph);color:#fff;border-radius:14px;padding:22px 0 18px;overflow-x:auto;scroll-snap-type:x proximity}
@@ -144,7 +143,7 @@ details p,details li{max-width:75ch}
     <div class="stat"><b id="sFkm">–</b><span>Frete por km</span></div>
   </div>
   <p class="enq" id="enq"></p>
-  <div class="toll" id="toll"><h2 id="tollT">Pedágio no caminho</h2><p id="tollP">Escolha as cidades para ver as praças da rota.</p><ol id="tollL"></ol><p>Valor exato do vale-pedágio: calculado pela Target ao gerar o CIOT, ou no <a href="https://www.semparar.com.br/trace-sua-rota" target="_blank" rel="noopener">Trace Sua Rota do Sem Parar</a>. Praças: base aberta do Sem Parar (CC BY 4.0), cobre rodovias federais e estaduais de SP.</p></div>
+  <div class="toll" id="toll"><h2>Pedágio estimado</h2><div class="tv" id="tollV">–</div><p id="tollP">Escolha as cidades para estimar.</p><p class="tot" id="tollTot" hidden></p></div>
   <div class="acts">
     <button class="btn fill" id="copy" type="button">Copiar resumo</button>
     <a class="btn" id="maps" href="#" target="_blank" rel="noopener">Conferir rota no Google Maps</a>
@@ -164,10 +163,14 @@ details p,details li{max-width:75ch}
   <p>A ANTT confere o piso pela rota declarada no MDF-e usando roteirizadores públicos como o Google Maps, então <b>confirme no botão "Conferir rota no Google Maps"</b> e, se der diferente, digite o km certo no trecho.</p>
   <div class="row"><label for="fator">Fator de estrada</label><input id="fator" inputmode="decimal" value="1,25"><span class="note">1,25 = a estrada é, em média, 25% mais longa que a linha reta.</span></div>
 </details>
-<details>
-  <summary>Rota de caminhão (opcional)</summary>
-  <p>Por padrão a rota é de carro. Para uma rota que respeita restrições de caminhão, crie uma chave gratuita em openrouteservice.org (menu "Sign up", depois "Dashboard" → "Tokens") e cole aqui. A chave fica salva só neste navegador.</p>
-  <div class="row"><label for="ors">Chave OpenRouteService</label><input id="ors" style="width:min(100%,420px)" autocomplete="off" spellcheck="false" placeholder="cole a chave aqui"></div>
+<details id="gcfg">
+  <summary>Pedágio e km do Google (configurar)</summary>
+  <p>Com uma chave do Google Maps (Routes API), o site passa a usar a <b>mesma rota do Google Maps</b>, que é a referência da ANTT, e calcula o <b>pedágio</b>. O Google dá o valor para carro; o site multiplica pelo número de eixos, que é como as concessionárias cobram caminhão. O valor exato do vale-pedágio continua sendo o da Target, no CIOT.</p>
+  <p>O Google cobra por consulta com pedágio, com 1.000 consultas grátis por mês. Na chave, restrinja o uso ao endereço do site e à Routes API, e coloque um limite diário de consultas para nunca passar da cota grátis.</p>
+  <div class="row"><label for="gkey">Chave do Google</label><input id="gkey" style="width:min(100%,420px)" autocomplete="off" spellcheck="false" placeholder="cole a chave aqui"></div>
+  <p class="note">A chave fica salva só neste navegador. Para valer para todos, coloque-a em GOOGLE_KEY no início do script do index.html.</p>
+  <p>Sem chave do Google, o km vem do OpenStreetMap (rota de carro). Para rota de caminhão no OpenStreetMap, use uma chave gratuita do openrouteservice.org:</p>
+  <div class="row"><label for="ors">Chave OpenRouteService</label><input id="ors" style="width:min(100%,420px)" autocomplete="off" spellcheck="false" placeholder="opcional"></div>
 </details>
 <details>
   <summary>Quando o piso é obrigatório</summary>
@@ -212,10 +215,11 @@ const parseBR=s=>{s=String(s||'').replace(/[^\d,.-]/g,'');if(!s)return NaN;if(s.
 const hav=(a,b)=>{const r=Math.PI/180,dl=(b[2]-a[2])*r,dn=(b[3]-a[3])*r,x=Math.sin(dl/2)**2+Math.cos(a[2]*r)*Math.cos(b[2]*r)*Math.sin(dn/2)**2;return 2*6371*Math.asin(Math.sqrt(x))};
 
 let C=[],CN=[],ready=false;
-let S={eixos:'6',tipo:'Carga geral',fator:1.25,frete:'',ors:'',stops:[{c:null,t:'Morrinhos',uf:'GO'},{c:null,t:'',km:null,man:false}]};
+const GOOGLE_KEY='';
+let S={eixos:'6',tipo:'Carga geral',fator:1.25,frete:'',ors:'',gkey:'',stops:[{c:null,t:'Morrinhos',uf:'GO'},{c:null,t:'',km:null,man:false}]};
 const KEY='pisoFreteANTT.v1';
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&Array.isArray(s.stops)&&s.stops.length)S=Object.assign(S,s)}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({eixos:S.eixos,tipo:S.tipo,fator:S.fator,frete:S.frete,ors:S.ors,stops:S.stops.map(s=>({t:s.c?s.c[0]:s.t,uf:s.c?s.c[1]:s.uf,km:s.km,man:s.man}))}))}catch(e){}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({eixos:S.eixos,tipo:S.tipo,fator:S.fator,frete:S.frete,ors:S.ors,gkey:S.gkey,stops:S.stops.map(s=>({t:s.c?s.c[0]:s.t,uf:s.c?s.c[1]:s.uf,km:s.km,man:s.man}))}))}catch(e){}};
 
 $('tipo').innerHTML=Object.keys(T).map(k=>`<option>${esc(k)}</option>`).join('');
 $('tipo').value=T[S.tipo]?S.tipo:'Carga geral';S.tipo=$('tipo').value;
@@ -231,60 +235,60 @@ $('fator').value=n2(S.fator);
 $('fator').addEventListener('input',()=>{const v=parseBR($('fator').value);if(v>=1&&v<=2){S.fator=v;update()}});
 $('frete').value=S.frete;
 $('ors').value=S.ors||'';
+$('gkey').value=S.gkey||'';
+$('gkey').addEventListener('change',()=>{S.gkey=$('gkey').value.trim();R.key='';update()});
 $('ors').addEventListener('change',()=>{S.ors=$('ors').value.trim();R.key='';update()});
 $('frete').addEventListener('input',()=>{S.frete=$('frete').value;update()});
 
-let R={key:'',legs:null,src:'',state:'idle',geo:null},rt=null,P=null;
-fetch('pracas.json').then(r=>r.json()).then(d=>{P=d;tolls()}).catch(()=>{P=[]});
-const routeKey=()=>{const n=S.stops.filter(s=>s.c);return n.length>1?(S.ors?'ors|':'osrm|')+n.map(s=>s.c[3]+','+s.c[2]).join(';'):''};
+let R={key:'',legs:null,src:'',state:'idle',toll:null},rt=null;
+const gk=()=>S.gkey||GOOGLE_KEY;
+const prov=()=>gk()?'google':S.ors?'ors':'osrm';
+const routeKey=()=>{const n=S.stops.filter(s=>s.c);return n.length>1?prov()+'|'+n.map(s=>s.c[3]+','+s.c[2]).join(';'):''};
 function msgRoute(){
   const m={idle:'',loading:'Calculando a rota pelas estradas…',err:'Não foi possível calcular a rota pelas estradas agora. Usando estimativa (linha reta × fator). Confira no Google Maps.'};
-  $('rmsg').textContent=R.state==='ok'?(R.src==='ors'?'Km pela estrada, com rota de caminhão (OpenRouteService). Confira no Google Maps antes de fechar.':'Km pela estrada (OpenStreetMap, rota de carro). Confira no Google Maps antes de fechar.'):m[R.state];
+  const ok={google:'Km pela rota do Google Maps (referência da ANTT).',ors:'Km pela estrada, com rota de caminhão (OpenRouteService). Confira no Google Maps antes de fechar.',osrm:'Km pela estrada (OpenStreetMap, rota de carro). Confira no Google Maps antes de fechar.'};
+  $('rmsg').textContent=R.state==='ok'?ok[R.src]:m[R.state];
 }
+const money=p=>(p||[]).filter(x=>x.currencyCode==='BRL').reduce((a,x)=>a+(+x.units||0)+(x.nanos||0)/1e9,0);
 async function getRoute(){
   const key=routeKey();
-  if(!key){R={key:'',legs:null,src:'',state:'idle',geo:null};msgRoute();tolls();return}
+  if(!key){R={key:'',legs:null,src:'',state:'idle',toll:null};msgRoute();tolls();return}
   if(key===R.key&&R.state!=='err')return;
-  R={key,legs:null,src:'',state:'loading',geo:null};msgRoute();tolls();
+  R={key,legs:null,src:'',state:'loading',toll:null};msgRoute();tolls();
   const pts=S.stops.filter(s=>s.c).map(s=>[s.c[3],s.c[2]]);
   try{
-    let legs,src,geo;
-    if(S.ors){
-      const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv/geojson',{method:'POST',headers:{'Authorization':S.ors,'Content-Type':'application/json'},body:JSON.stringify({coordinates:pts,radiuses:pts.map(()=>5000)})});
-      if(!r.ok)throw new Error('ors');const j=await r.json();const ft=j.features[0];legs=ft.properties.segments.map(x=>x.distance/1000);geo=ft.geometry.coordinates;src='ors';
+    let legs,src,toll=null;const pv=prov();
+    if(pv==='google'){
+      const ll=p=>({location:{latLng:{latitude:p[1],longitude:p[0]}}});
+      const body={origin:ll(pts[0]),destination:ll(pts[pts.length-1]),intermediates:pts.slice(1,-1).map(ll),travelMode:'DRIVE',extraComputations:['TOLLS'],routeModifiers:{vehicleInfo:{emissionType:'DIESEL'}},languageCode:'pt-BR',units:'METRIC'};
+      const r=await fetch('https://routes.googleapis.com/directions/v2:computeRoutes',{method:'POST',headers:{'Content-Type':'application/json','X-Goog-Api-Key':gk(),'X-Goog-FieldMask':'routes.distanceMeters,routes.legs.distanceMeters,routes.travelAdvisory.tollInfo'},body:JSON.stringify(body)});
+      if(!r.ok)throw new Error('google');const j=await r.json();const rt0=j.routes&&j.routes[0];if(!rt0)throw new Error('google');
+      legs=rt0.legs.map(x=>(x.distanceMeters||0)/1000);src='google';
+      const ti=rt0.travelAdvisory&&rt0.travelAdvisory.tollInfo;
+      toll=!ti?{car:0,known:true}:ti.estimatedPrice&&ti.estimatedPrice.length?{car:money(ti.estimatedPrice),known:true}:{car:null,known:false};
+    }else if(pv==='ors'){
+      const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv',{method:'POST',headers:{'Authorization':S.ors,'Content-Type':'application/json'},body:JSON.stringify({coordinates:pts,radiuses:pts.map(()=>5000)})});
+      if(!r.ok)throw new Error('ors');const j=await r.json();legs=j.routes[0].segments.map(x=>x.distance/1000);src='ors';
     }else{
-      const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+pts.map(p=>p.join(',')).join(';')+'?overview=full&geometries=geojson');
-      if(!r.ok)throw new Error('osrm');const j=await r.json();if(j.code!=='Ok')throw new Error('osrm');legs=j.routes[0].legs.map(x=>x.distance/1000);geo=j.routes[0].geometry.coordinates;src='osrm';
+      const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+pts.map(p=>p.join(',')).join(';')+'?overview=false');
+      if(!r.ok)throw new Error('osrm');const j=await r.json();if(j.code!=='Ok')throw new Error('osrm');legs=j.routes[0].legs.map(x=>x.distance/1000);src='osrm';
     }
-    if(key!==routeKey())return;R={key,legs,src,state:'ok',geo};
-  }catch(e){if(key!==routeKey())return;R={key,legs:null,src:'',state:'err',geo:null}}
-  msgRoute();tolls();update(false,true);
+    if(key!==routeKey())return;R={key,legs,src,state:'ok',toll};
+  }catch(e){if(key!==routeKey())return;R={key,legs:null,src:'',state:'err',toll:null}}
+  msgRoute();update(false,true);
 }
-function onRoute(){
-  const g=R.geo;if(!g||!P)return[];
-  let a=90,b=-90,c=180,d=-180;for(const q of g){if(q[1]<a)a=q[1];if(q[1]>b)b=q[1];if(q[0]<c)c=q[0];if(q[0]>d)d=q[0]}
-  const out=[];
-  for(const t of P){
-    if(t[8]<a-.05||t[8]>b+.05||t[9]<c-.05||t[9]>d+.05)continue;
-    const kx=111.32*Math.cos(t[8]*Math.PI/180),ky=110.57;let best=1e9,at=0;
-    for(let i=1;i<g.length;i++){
-      const x1=(g[i-1][0]-t[9])*kx,y1=(g[i-1][1]-t[8])*ky,x2=(g[i][0]-t[9])*kx,y2=(g[i][1]-t[8])*ky,dx=x2-x1,dy=y2-y1,l=dx*dx+dy*dy;
-      let u=l?-(x1*dx+y1*dy)/l:0;u=Math.max(0,Math.min(1,u));const ex=x1+u*dx,ey=y1+u*dy,dd=ex*ex+ey*ey;
-      if(dd<best){best=dd;at=i}
-    }
-    if(best<1.5*1.5)out.push({t,at});
-  }
-  return out.sort((x,y)=>x.at-y.at).map(x=>x.t);
-}
-function tolls(){
-  const L=$('tollL'),T=$('tollT'),Pp=$('tollP');if(!L)return;L.innerHTML='';
-  if(R.state==='loading'){T.textContent='Pedágio no caminho';Pp.textContent='Procurando as praças da rota…';return}
-  if(R.state!=='ok'){T.textContent='Pedágio no caminho';Pp.textContent=R.state==='err'?'Sem a rota pela estrada não dá para listar as praças. Use o link abaixo.':'Escolha as cidades para ver as praças da rota.';return}
-  if(!P){Pp.textContent='Carregando praças…';return}
-  const f=onRoute(),n=f.length;
-  T.textContent=n?`Pedágio no caminho: ${n} praça${n>1?'s':''}`:'Pedágio no caminho';
-  Pp.textContent=n?'Lista na ordem da viagem. Pode haver mais praças em rodovias estaduais fora de SP.':'Nenhuma praça federal ou paulista na rota. Pode haver praças em rodovias estaduais de outros estados.';
-  L.innerHTML=f.map(t=>`<li><b>${esc(t[1])} km ${esc(t[4])} · ${esc(t[0])}</b><span>${esc(t[3])}/${esc(t[2])} · ${esc(t[6])}${t[5]==='ambos'?'':' · cobra só no sentido '+esc(t[5])} · <a href="${esc(t[7])}" target="_blank" rel="noopener">tarifa oficial</a></span></li>`).join('');
+function tollCalc(){const t=R.toll;if(!t||!t.known||t.car==null)return null;return t.car*(+S.eixos)}
+function tolls(piso){
+  const V=$('tollV'),Pp=$('tollP'),Tt=$('tollTot');if(!V)return;Tt.hidden=true;V.textContent='–';
+  if(!gk()){Pp.innerHTML='Para estimar o pedágio, configure a chave do Google em "Pedágio e km do Google", no fim da página.';return}
+  if(R.state==='loading'){Pp.textContent='Calculando o pedágio da rota…';return}
+  if(R.state==='err'){Pp.textContent='Não foi possível consultar o Google agora (confira a chave). Valor exato: Target, no CIOT.';return}
+  if(R.state!=='ok'||R.src!=='google'){Pp.textContent='Escolha as cidades para estimar.';return}
+  const t=R.toll;
+  if(!t.known){Pp.textContent='A rota tem pedágio, mas o Google não informou o valor. Consulte a Target no CIOT.';return}
+  const v=tollCalc();V.textContent=brl(v);
+  Pp.textContent=t.car?`Carro ${brl(t.car)} × ${S.eixos} eixos. Estimativa: o valor exato do vale-pedágio sai na Target, ao gerar o CIOT.`:'Nenhum pedágio na rota do Google.';
+  if(piso&&v){Tt.hidden=false;Tt.textContent=`Piso + pedágio: ${brl(piso+v)} (o vale-pedágio é pago à parte do frete)`}
 }
 function segKm(i){
   const s=S.stops[i],p=S.stops[i-1];
@@ -365,12 +369,13 @@ function update(fromKm,fromRoute){
   const named=S.stops.map((s,i)=>({s,i})).filter(x=>x.s.c);
   $('road').innerHTML=named.length?named.map((x,j)=>{const k=segs[x.i];return `<li>${j&&k?`<span class="seg">${n0(k.v)} km${k.est?' *':''}</span>`:''}<div class="dot">${x.i?x.i:'O'}</div><div class="nm">${esc(x.s.c[0])}</div><div class="sub">${esc(x.s.c[1])}${x.i?'':' · origem'}</div></li>`}).join(''):'<li class="empty" style="width:auto">A estrada aparece aqui quando você escolher as cidades.</li>';
   const sig=piso.toFixed(2);if(sig!==last){last=sig;const p=$('plate');p.classList.add('pulse');setTimeout(()=>p.classList.remove('pulse'),220)}
+  tolls(piso);
   if(!fromRoute){clearTimeout(rt);rt=setTimeout(getRoute,500)}
   save();
 }
 $('copy').addEventListener('click',async()=>{
   const co=coef(),fr=parseBR(S.frete),rota=S.stops.filter(s=>s.c).map(s=>`${s.c[0]}/${s.c[1]}`).join(' → ');
-  const txt=[`Piso de frete ANTT (Tabela A, Portaria SUROC 22/2026)`,`Carga: ${S.tipo} · ${S.eixos} eixos`,`Rota: ${rota||'-'} (${$('sKm').textContent})`,`${$('pk').textContent}: ${$('piso').textContent} = ${$('formula').textContent}`,fr>0?`Frete combinado: ${brl(fr)} · ${$('status').textContent}`:'',R.state==='ok'&&P?(()=>{const f=onRoute();return f.length?`Pedágio: ${f.length} praça(s) no caminho: `+f.map(t=>`${t[1]} ${t[0]}`).join('; ')+' (valor exato no CIOT)':''})():''].filter(Boolean).join('\n');
+  const txt=[`Piso de frete ANTT (Tabela A, Portaria SUROC 22/2026)`,`Carga: ${S.tipo} · ${S.eixos} eixos`,`Rota: ${rota||'-'} (${$('sKm').textContent})`,`${$('pk').textContent}: ${$('piso').textContent} = ${$('formula').textContent}`,fr>0?`Frete combinado: ${brl(fr)} · ${$('status').textContent}`:'',tollCalc()!=null&&R.src==='google'?`Pedágio estimado: ${brl(tollCalc())} (carro ${brl(R.toll.car)} × ${S.eixos} eixos; valor exato no CIOT)`:''].filter(Boolean).join('\n');
   const b=$('copy');try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent='Copiar resumo',1600);
 });
 

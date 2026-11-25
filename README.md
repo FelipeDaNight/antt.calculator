@@ -9,7 +9,7 @@ Página única (HTML + JavaScript, sem dependências) que calcula o piso mínimo
 - Km de cada trecho pela estrada, calculado pelo roteirizador gratuito do OpenStreetMap (OSRM). Opcionalmente, rota de caminhão pelo OpenRouteService (perfil `driving-hgv`) com uma chave gratuita.
 - Se o roteirizador não responder, usa uma estimativa (linha reta × fator de estrada, padrão 1,25). Sempre dá para digitar o km real do trecho.
 - Link para conferir a rota completa no Google Maps.
-- Praças de pedágio no caminho (rodovias federais e estaduais de SP), na ordem da viagem, com link para a tarifa oficial de cada uma. O valor exato do vale-pedágio fica com a IPEF no CIOT.
+- **Pedágio estimado** (opcional, com chave do Google Maps Routes API): o Google devolve o valor para carro e o site multiplica pelo número de eixos. Com a chave, o km também passa a vir da rota do Google Maps, a mesma referência da ANTT. O valor exato do vale-pedágio fica com a IPEF no CIOT.
 - Comparação com o frete combinado: avisa quando o valor está abaixo do piso (o CIOT é bloqueado em carga lotação).
 - Enquadramento: 1 entrega = carga lotação (piso obrigatório); várias entregas = valor de referência.
 - Botão para copiar um resumo da viagem.
@@ -28,7 +28,6 @@ Coeficientes da **Tabela A** do Anexo II da Resolução ANTT nº 5.867/2020, com
 ## Arquivos
 
 - `index.html`: a calculadora.
-- `pracas.json`: praças de pedágio ativas, gerado a partir da base aberta [Sem-Parar/SEM-PARAR-PEDAGIOS](https://github.com/Sem-Parar/SEM-PARAR-PEDAGIOS) (licença CC BY 4.0). A base não traz valor de tarifa.
 - `municipios.json`: lista de municípios (nome, UF, latitude, longitude), gerada a partir do conjunto de dados [kelvins/municipios-brasileiros](https://github.com/kelvins/municipios-brasileiros) (licença MIT).
 
 ## Como usar
@@ -46,3 +45,10 @@ Para publicar de graça, ative o **GitHub Pages** no repositório (Settings → 
 ## Aviso
 
 A rota vai do centro de uma cidade ao centro da outra, não do endereço exato da fábrica ou do cliente. O servidor público do OSRM é para uso leve; para muito volume, use a chave do OpenRouteService. A ANTT confere o piso pela rota declarada no MDF-e usando roteirizadores públicos, então confirme o km real antes de fechar o frete. Ferramenta de apoio; para casos de dúvida, use a calculadora oficial em calculadorafrete.antt.gov.br.
+
+## Chave do Google (pedágio)
+
+1. No Google Cloud Console, crie um projeto, ative a **Routes API** e crie uma **chave de API** (precisa de conta de faturamento; consultas com pedágio têm 1.000 grátis por mês).
+2. Restrinja a chave: em *Restrições de aplicativo*, escolha *Referenciadores HTTP* e coloque `https://felipedanight.github.io/*`; em *Restrições de API*, deixe só a Routes API.
+3. Em *Cotas* da Routes API, limite as consultas por dia (por exemplo, 30) para não passar da cota grátis.
+4. Cole a chave no site (seção "Pedágio e km do Google") ou em `GOOGLE_KEY`, no início do script de `index.html`, para valer para todos.
