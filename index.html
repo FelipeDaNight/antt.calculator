@@ -114,6 +114,7 @@ details p,details li{max-width:75ch}
     <span class="lbl">Roteiro</span>
     <div id="stops"></div>
     <button class="btn" id="add" type="button">+ Adicionar entrega</button>
+    <p class="hint" id="rmsg" aria-live="polite"></p>
     <p class="hint" id="loadMsg">Carregando lista de cidades…</p>
   </div>
   <div class="sec">
@@ -151,8 +152,14 @@ details p,details li{max-width:75ch}
 <section class="band" style="padding-top:0"><div class="wrap">
 <details>
   <summary>Como a distância é calculada</summary>
-  <p>O site estima cada trecho pela distância em linha reta entre as cidades multiplicada por um fator de estrada. A ANTT confere o piso pela rota declarada no MDF-e usando roteirizadores públicos como o Google Maps, então <b>confirme no botão "Conferir rota no Google Maps"</b> e, se der diferente, digite o km certo no trecho (o campo deixa de ser estimado).</p>
+  <p>O site traça a rota pelas estradas entre as cidades (do centro de uma cidade ao centro da outra) usando o roteirizador gratuito do OpenStreetMap. Se ele estiver fora do ar, usa uma estimativa: linha reta entre as cidades × fator de estrada, e o km aparece com borda tracejada.</p>
+  <p>A ANTT confere o piso pela rota declarada no MDF-e usando roteirizadores públicos como o Google Maps, então <b>confirme no botão "Conferir rota no Google Maps"</b> e, se der diferente, digite o km certo no trecho.</p>
   <div class="row"><label for="fator">Fator de estrada</label><input id="fator" inputmode="decimal" value="1,25"><span class="note">1,25 = a estrada é, em média, 25% mais longa que a linha reta.</span></div>
+</details>
+<details>
+  <summary>Rota de caminhão (opcional)</summary>
+  <p>Por padrão a rota é de carro. Para uma rota que respeita restrições de caminhão, crie uma chave gratuita em openrouteservice.org (menu "Sign up", depois "Dashboard" → "Tokens") e cole aqui. A chave fica salva só neste navegador.</p>
+  <div class="row"><label for="ors">Chave OpenRouteService</label><input id="ors" style="width:min(100%,420px)" autocomplete="off" spellcheck="false" placeholder="cole a chave aqui"></div>
 </details>
 <details>
   <summary>Quando o piso é obrigatório</summary>
@@ -197,10 +204,10 @@ const parseBR=s=>{s=String(s||'').replace(/[^\d,.-]/g,'');if(!s)return NaN;if(s.
 const hav=(a,b)=>{const r=Math.PI/180,dl=(b[2]-a[2])*r,dn=(b[3]-a[3])*r,x=Math.sin(dl/2)**2+Math.cos(a[2]*r)*Math.cos(b[2]*r)*Math.sin(dn/2)**2;return 2*6371*Math.asin(Math.sqrt(x))};
 
 let C=[],CN=[],ready=false;
-let S={eixos:'6',tipo:'Carga geral',fator:1.25,frete:'',stops:[{c:null,t:'Morrinhos',uf:'GO'},{c:null,t:'',km:null,man:false}]};
+let S={eixos:'6',tipo:'Carga geral',fator:1.25,frete:'',ors:'',stops:[{c:null,t:'Morrinhos',uf:'GO'},{c:null,t:'',km:null,man:false}]};
 const KEY='pisoFreteANTT.v1';
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&Array.isArray(s.stops)&&s.stops.length)S=Object.assign(S,s)}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({eixos:S.eixos,tipo:S.tipo,fator:S.fator,frete:S.frete,stops:S.stops.map(s=>({t:s.c?s.c[0]:s.t,uf:s.c?s.c[1]:s.uf,km:s.km,man:s.man}))}))}catch(e){}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({eixos:S.eixos,tipo:S.tipo,fator:S.fator,frete:S.frete,ors:S.ors,stops:S.stops.map(s=>({t:s.c?s.c[0]:s.t,uf:s.c?s.c[1]:s.uf,km:s.km,man:s.man}))}))}catch(e){}};
 
 $('tipo').innerHTML=Object.keys(T).map(k=>`<option>${esc(k)}</option>`).join('');
 $('tipo').value=T[S.tipo]?S.tipo:'Carga geral';S.tipo=$('tipo').value;
@@ -215,11 +222,39 @@ $('tipo').addEventListener('change',()=>{S.tipo=$('tipo').value;renderEixos();up
 $('fator').value=n2(S.fator);
 $('fator').addEventListener('input',()=>{const v=parseBR($('fator').value);if(v>=1&&v<=2){S.fator=v;update()}});
 $('frete').value=S.frete;
+$('ors').value=S.ors||'';
+$('ors').addEventListener('change',()=>{S.ors=$('ors').value.trim();R.key='';update()});
 $('frete').addEventListener('input',()=>{S.frete=$('frete').value;update()});
 
+let R={key:'',legs:null,src:'',state:'idle'},rt=null;
+const routeKey=()=>{const n=S.stops.filter(s=>s.c);return n.length>1?(S.ors?'ors|':'osrm|')+n.map(s=>s.c[3]+','+s.c[2]).join(';'):''};
+function msgRoute(){
+  const m={idle:'',loading:'Calculando a rota pelas estradas…',err:'Não foi possível calcular a rota pelas estradas agora. Usando estimativa (linha reta × fator). Confira no Google Maps.'};
+  $('rmsg').textContent=R.state==='ok'?(R.src==='ors'?'Km pela estrada, com rota de caminhão (OpenRouteService). Confira no Google Maps antes de fechar.':'Km pela estrada (OpenStreetMap, rota de carro). Confira no Google Maps antes de fechar.'):m[R.state];
+}
+async function getRoute(){
+  const key=routeKey();
+  if(!key){R={key:'',legs:null,src:'',state:'idle'};msgRoute();return}
+  if(key===R.key&&R.state!=='err')return;
+  R={key,legs:null,src:'',state:'loading'};msgRoute();
+  const pts=S.stops.filter(s=>s.c).map(s=>[s.c[3],s.c[2]]);
+  try{
+    let legs,src;
+    if(S.ors){
+      const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv',{method:'POST',headers:{'Authorization':S.ors,'Content-Type':'application/json'},body:JSON.stringify({coordinates:pts,radiuses:pts.map(()=>5000)})});
+      if(!r.ok)throw new Error('ors');const j=await r.json();legs=j.routes[0].segments.map(x=>x.distance/1000);src='ors';
+    }else{
+      const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+pts.map(p=>p.join(',')).join(';')+'?overview=false');
+      if(!r.ok)throw new Error('osrm');const j=await r.json();if(j.code!=='Ok')throw new Error('osrm');legs=j.routes[0].legs.map(x=>x.distance/1000);src='osrm';
+    }
+    if(key!==routeKey())return;R={key,legs,src,state:'ok'};
+  }catch(e){if(key!==routeKey())return;R={key,legs:null,src:'',state:'err'}}
+  msgRoute();update(false,true);
+}
 function segKm(i){
   const s=S.stops[i],p=S.stops[i-1];
   if(s.man&&s.km>0)return{v:s.km,est:false};
+  if(R.state==='ok'&&s.c&&p&&p.c){const nm=S.stops.map((x,k)=>x.c?k:-1).filter(k=>k>=0),j=nm.indexOf(i);if(j>0&&nm[j-1]===i-1&&R.legs[j-1]!=null)return{v:Math.round(R.legs[j-1]),est:false,rota:true}}
   if(s.c&&p&&p.c)return{v:Math.round(hav(p.c,s.c)*S.fator),est:true};
   return null;
 }
@@ -275,10 +310,10 @@ $('add').addEventListener('click',()=>{S.stops.push({c:null,t:'',km:null,man:fal
 $('clear').addEventListener('click',()=>{const o=S.stops[0];S.stops=[o,{c:null,t:'',km:null,man:false}];S.frete='';$('frete').value='';renderStops();update()});
 
 let last='';
-function update(fromKm){
+function update(fromKm,fromRoute){
   const co=coef();let tot=0,cnt=0;const segs=[null];
   S.stops.forEach((s,i)=>{if(!i)return;const k=segKm(i);segs.push(k);if(s.c||s.man)cnt++;if(k)tot+=k.v});
-  if(!fromKm)document.querySelectorAll('.stop').forEach(el=>{const i=+el.dataset.i;if(!i)return;const k=segs[i],inp=el.querySelector('.kmi'),w=el.querySelector('.km');if(document.activeElement===inp)return;inp.value=k?n0(k.v):'';w.classList.toggle('est',!!(k&&k.est));w.title=k&&k.est?'Estimado. Digite para corrigir.':''});
+  if(!fromKm)document.querySelectorAll('.stop').forEach(el=>{const i=+el.dataset.i;if(!i)return;const k=segs[i],inp=el.querySelector('.kmi'),w=el.querySelector('.km');if(document.activeElement===inp)return;inp.value=k?n0(k.v):'';w.classList.toggle('est',!!(k&&k.est));w.title=k?(k.est?'Estimado. Digite para corrigir.':k.rota?'Pela estrada. Digite para corrigir.':'Digitado'):''});
   const multi=cnt>1;$('pk').textContent=multi?'Referência (várias entregas)':'Piso mínimo';
   const fr=parseBR(S.frete);let piso=0;
   if(co&&tot>0){piso=tot*co.ccd+co.cc;$('piso').textContent=brl(piso);$('formula').textContent=`${n0(tot)} km × ${n4(co.ccd)} + ${brl(co.cc)} (CC)`}
@@ -295,6 +330,7 @@ function update(fromKm){
   const named=S.stops.map((s,i)=>({s,i})).filter(x=>x.s.c);
   $('road').innerHTML=named.length?named.map((x,j)=>{const k=segs[x.i];return `<li>${j&&k?`<span class="seg">${n0(k.v)} km${k.est?' *':''}</span>`:''}<div class="dot">${x.i?x.i:'O'}</div><div class="nm">${esc(x.s.c[0])}</div><div class="sub">${esc(x.s.c[1])}${x.i?'':' · origem'}</div></li>`}).join(''):'<li class="empty" style="width:auto">A estrada aparece aqui quando você escolher as cidades.</li>';
   const sig=piso.toFixed(2);if(sig!==last){last=sig;const p=$('plate');p.classList.add('pulse');setTimeout(()=>p.classList.remove('pulse'),220)}
+  if(!fromRoute){clearTimeout(rt);rt=setTimeout(getRoute,500)}
   save();
 }
 $('copy').addEventListener('click',async()=>{
