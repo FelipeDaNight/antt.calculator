@@ -69,6 +69,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .stat b{display:block;font:700 22px "Barlow Semi Condensed",sans-serif;white-space:nowrap}
 .stat span{color:var(--mute);font-size:14px}
 .enq{margin:14px 0 0;font-size:15px}
+.toll{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.toll h2{margin:0;font-size:20px;font-weight:700}
+.toll p{margin:4px 0 0;font-size:14px;color:var(--mute)}
+.toll ol{margin:10px 0 0;padding:0;list-style:none;max-height:260px;overflow:auto}
+.toll li{padding:8px 0;border-top:1px solid var(--line);font-size:15px;line-height:1.35}
+.toll li b{font-weight:600}.toll li span{display:block;color:var(--mute);font-size:13px}
+.toll a{color:var(--ok)}
 .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .road{background:var(--asph);color:#fff;border-radius:14px;padding:22px 0 18px;overflow-x:auto;scroll-snap-type:x proximity}
 .road ol{list-style:none;margin:0;padding:0 18px;display:flex;min-width:max-content;position:relative}
@@ -137,6 +144,7 @@ details p,details li{max-width:75ch}
     <div class="stat"><b id="sFkm">–</b><span>Frete por km</span></div>
   </div>
   <p class="enq" id="enq"></p>
+  <div class="toll" id="toll"><h2 id="tollT">Pedágio no caminho</h2><p id="tollP">Escolha as cidades para ver as praças da rota.</p><ol id="tollL"></ol><p>Valor exato do vale-pedágio: calculado pela Target ao gerar o CIOT, ou no <a href="https://www.semparar.com.br/trace-sua-rota" target="_blank" rel="noopener">Trace Sua Rota do Sem Parar</a>. Praças: base aberta do Sem Parar (CC BY 4.0), cobre rodovias federais e estaduais de SP.</p></div>
   <div class="acts">
     <button class="btn fill" id="copy" type="button">Copiar resumo</button>
     <a class="btn" id="maps" href="#" target="_blank" rel="noopener">Conferir rota no Google Maps</a>
@@ -226,7 +234,8 @@ $('ors').value=S.ors||'';
 $('ors').addEventListener('change',()=>{S.ors=$('ors').value.trim();R.key='';update()});
 $('frete').addEventListener('input',()=>{S.frete=$('frete').value;update()});
 
-let R={key:'',legs:null,src:'',state:'idle'},rt=null;
+let R={key:'',legs:null,src:'',state:'idle',geo:null},rt=null,P=null;
+fetch('pracas.json').then(r=>r.json()).then(d=>{P=d;tolls()}).catch(()=>{P=[]});
 const routeKey=()=>{const n=S.stops.filter(s=>s.c);return n.length>1?(S.ors?'ors|':'osrm|')+n.map(s=>s.c[3]+','+s.c[2]).join(';'):''};
 function msgRoute(){
   const m={idle:'',loading:'Calculando a rota pelas estradas…',err:'Não foi possível calcular a rota pelas estradas agora. Usando estimativa (linha reta × fator). Confira no Google Maps.'};
@@ -234,22 +243,48 @@ function msgRoute(){
 }
 async function getRoute(){
   const key=routeKey();
-  if(!key){R={key:'',legs:null,src:'',state:'idle'};msgRoute();return}
+  if(!key){R={key:'',legs:null,src:'',state:'idle',geo:null};msgRoute();tolls();return}
   if(key===R.key&&R.state!=='err')return;
-  R={key,legs:null,src:'',state:'loading'};msgRoute();
+  R={key,legs:null,src:'',state:'loading',geo:null};msgRoute();tolls();
   const pts=S.stops.filter(s=>s.c).map(s=>[s.c[3],s.c[2]]);
   try{
-    let legs,src;
+    let legs,src,geo;
     if(S.ors){
-      const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv',{method:'POST',headers:{'Authorization':S.ors,'Content-Type':'application/json'},body:JSON.stringify({coordinates:pts,radiuses:pts.map(()=>5000)})});
-      if(!r.ok)throw new Error('ors');const j=await r.json();legs=j.routes[0].segments.map(x=>x.distance/1000);src='ors';
+      const r=await fetch('https://api.openrouteservice.org/v2/directions/driving-hgv/geojson',{method:'POST',headers:{'Authorization':S.ors,'Content-Type':'application/json'},body:JSON.stringify({coordinates:pts,radiuses:pts.map(()=>5000)})});
+      if(!r.ok)throw new Error('ors');const j=await r.json();const ft=j.features[0];legs=ft.properties.segments.map(x=>x.distance/1000);geo=ft.geometry.coordinates;src='ors';
     }else{
-      const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+pts.map(p=>p.join(',')).join(';')+'?overview=false');
-      if(!r.ok)throw new Error('osrm');const j=await r.json();if(j.code!=='Ok')throw new Error('osrm');legs=j.routes[0].legs.map(x=>x.distance/1000);src='osrm';
+      const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+pts.map(p=>p.join(',')).join(';')+'?overview=full&geometries=geojson');
+      if(!r.ok)throw new Error('osrm');const j=await r.json();if(j.code!=='Ok')throw new Error('osrm');legs=j.routes[0].legs.map(x=>x.distance/1000);geo=j.routes[0].geometry.coordinates;src='osrm';
     }
-    if(key!==routeKey())return;R={key,legs,src,state:'ok'};
-  }catch(e){if(key!==routeKey())return;R={key,legs:null,src:'',state:'err'}}
-  msgRoute();update(false,true);
+    if(key!==routeKey())return;R={key,legs,src,state:'ok',geo};
+  }catch(e){if(key!==routeKey())return;R={key,legs:null,src:'',state:'err',geo:null}}
+  msgRoute();tolls();update(false,true);
+}
+function onRoute(){
+  const g=R.geo;if(!g||!P)return[];
+  let a=90,b=-90,c=180,d=-180;for(const q of g){if(q[1]<a)a=q[1];if(q[1]>b)b=q[1];if(q[0]<c)c=q[0];if(q[0]>d)d=q[0]}
+  const out=[];
+  for(const t of P){
+    if(t[8]<a-.05||t[8]>b+.05||t[9]<c-.05||t[9]>d+.05)continue;
+    const kx=111.32*Math.cos(t[8]*Math.PI/180),ky=110.57;let best=1e9,at=0;
+    for(let i=1;i<g.length;i++){
+      const x1=(g[i-1][0]-t[9])*kx,y1=(g[i-1][1]-t[8])*ky,x2=(g[i][0]-t[9])*kx,y2=(g[i][1]-t[8])*ky,dx=x2-x1,dy=y2-y1,l=dx*dx+dy*dy;
+      let u=l?-(x1*dx+y1*dy)/l:0;u=Math.max(0,Math.min(1,u));const ex=x1+u*dx,ey=y1+u*dy,dd=ex*ex+ey*ey;
+      if(dd<best){best=dd;at=i}
+    }
+    if(best<1.5*1.5)out.push({t,at});
+  }
+  return out.sort((x,y)=>x.at-y.at).map(x=>x.t);
+}
+function tolls(){
+  const L=$('tollL'),T=$('tollT'),Pp=$('tollP');if(!L)return;L.innerHTML='';
+  if(R.state==='loading'){T.textContent='Pedágio no caminho';Pp.textContent='Procurando as praças da rota…';return}
+  if(R.state!=='ok'){T.textContent='Pedágio no caminho';Pp.textContent=R.state==='err'?'Sem a rota pela estrada não dá para listar as praças. Use o link abaixo.':'Escolha as cidades para ver as praças da rota.';return}
+  if(!P){Pp.textContent='Carregando praças…';return}
+  const f=onRoute(),n=f.length;
+  T.textContent=n?`Pedágio no caminho: ${n} praça${n>1?'s':''}`:'Pedágio no caminho';
+  Pp.textContent=n?'Lista na ordem da viagem. Pode haver mais praças em rodovias estaduais fora de SP.':'Nenhuma praça federal ou paulista na rota. Pode haver praças em rodovias estaduais de outros estados.';
+  L.innerHTML=f.map(t=>`<li><b>${esc(t[1])} km ${esc(t[4])} · ${esc(t[0])}</b><span>${esc(t[3])}/${esc(t[2])} · ${esc(t[6])}${t[5]==='ambos'?'':' · cobra só no sentido '+esc(t[5])} · <a href="${esc(t[7])}" target="_blank" rel="noopener">tarifa oficial</a></span></li>`).join('');
 }
 function segKm(i){
   const s=S.stops[i],p=S.stops[i-1];
@@ -335,7 +370,7 @@ function update(fromKm,fromRoute){
 }
 $('copy').addEventListener('click',async()=>{
   const co=coef(),fr=parseBR(S.frete),rota=S.stops.filter(s=>s.c).map(s=>`${s.c[0]}/${s.c[1]}`).join(' → ');
-  const txt=[`Piso de frete ANTT (Tabela A, Portaria SUROC 22/2026)`,`Carga: ${S.tipo} · ${S.eixos} eixos`,`Rota: ${rota||'-'} (${$('sKm').textContent})`,`${$('pk').textContent}: ${$('piso').textContent} = ${$('formula').textContent}`,fr>0?`Frete combinado: ${brl(fr)} · ${$('status').textContent}`:''].filter(Boolean).join('\n');
+  const txt=[`Piso de frete ANTT (Tabela A, Portaria SUROC 22/2026)`,`Carga: ${S.tipo} · ${S.eixos} eixos`,`Rota: ${rota||'-'} (${$('sKm').textContent})`,`${$('pk').textContent}: ${$('piso').textContent} = ${$('formula').textContent}`,fr>0?`Frete combinado: ${brl(fr)} · ${$('status').textContent}`:'',R.state==='ok'&&P?(()=>{const f=onRoute();return f.length?`Pedágio: ${f.length} praça(s) no caminho: `+f.map(t=>`${t[1]} ${t[0]}`).join('; ')+' (valor exato no CIOT)':''})():''].filter(Boolean).join('\n');
   const b=$('copy');try{await navigator.clipboard.writeText(txt);b.textContent='Copiado'}catch(e){b.textContent='Não foi possível copiar'}setTimeout(()=>b.textContent='Copiar resumo',1600);
 });
 

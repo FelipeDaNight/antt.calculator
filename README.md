@@ -9,6 +9,7 @@ Página única (HTML + JavaScript, sem dependências) que calcula o piso mínimo
 - Km de cada trecho pela estrada, calculado pelo roteirizador gratuito do OpenStreetMap (OSRM). Opcionalmente, rota de caminhão pelo OpenRouteService (perfil `driving-hgv`) com uma chave gratuita.
 - Se o roteirizador não responder, usa uma estimativa (linha reta × fator de estrada, padrão 1,25). Sempre dá para digitar o km real do trecho.
 - Link para conferir a rota completa no Google Maps.
+- Praças de pedágio no caminho (rodovias federais e estaduais de SP), na ordem da viagem, com link para a tarifa oficial de cada uma. O valor exato do vale-pedágio fica com a IPEF no CIOT.
 - Comparação com o frete combinado: avisa quando o valor está abaixo do piso (o CIOT é bloqueado em carga lotação).
 - Enquadramento: 1 entrega = carga lotação (piso obrigatório); várias entregas = valor de referência.
 - Botão para copiar um resumo da viagem.
@@ -27,6 +28,7 @@ Coeficientes da **Tabela A** do Anexo II da Resolução ANTT nº 5.867/2020, com
 ## Arquivos
 
 - `index.html`: a calculadora.
+- `pracas.json`: praças de pedágio ativas, gerado a partir da base aberta [Sem-Parar/SEM-PARAR-PEDAGIOS](https://github.com/Sem-Parar/SEM-PARAR-PEDAGIOS) (licença CC BY 4.0). A base não traz valor de tarifa.
 - `municipios.json`: lista de municípios (nome, UF, latitude, longitude), gerada a partir do conjunto de dados [kelvins/municipios-brasileiros](https://github.com/kelvins/municipios-brasileiros) (licença MIT).
 
 ## Como usar
